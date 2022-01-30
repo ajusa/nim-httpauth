@@ -37,6 +37,7 @@ proc send_email*(self: Mailer, recipient, subject, message: string) {.async.} =
   when defined(mock_send_email):
     let m = (self.sender_email_addr, recipients, $encoded)
     mock_email_spool.add m
+    echo m
     return
 
   if not self.connected:

@@ -61,7 +61,7 @@ type
     https_only_cookies*: bool
     backend: HTTPAuthBackend
     mailer: Mailer
-    headers: HttpHeaders
+    headers*: HttpHeaders
 
 proc r*(e: typedesc, msg: string) =
   raise newException(e, msg)
@@ -148,7 +148,7 @@ proc get_auth_cookie(self: HTTPAuth, headers: HttpHeaders): string =
     return ""
   return cookies[self.cookie_name]
 
-proc get_session(self: HTTPAuth): string =
+proc get_session*(self: HTTPAuth): string =
   ## Get current session from a cookie
   assert self.headers != nil
   let cookie_cyphertext = self.get_auth_cookie(self.headers)
@@ -285,7 +285,7 @@ proc register*(self: HTTPAuth, username, password, email_addr: string, role="use
 
 type ResetContainer = tuple[username, email_addr, tstamp: string]
 
-proc validate_registration*(self: HTTPAuth, registration_code: string) =
+proc validate_registration*(self: HTTPAuth, registration_code: string): User =
   ## Validate pending account registration; create a new account if successful.
   var r: PendingRegistration
   try:
@@ -308,7 +308,7 @@ proc validate_registration*(self: HTTPAuth, registration_code: string) =
 
   # the user data is moved from pending_registrations to _users
   let tstamp = getTime().utc
-  self.backend.set_user(User(
+  result = User(
       username: r.username,
       role: r.role,
       hash: r.hash,
@@ -316,7 +316,8 @@ proc validate_registration*(self: HTTPAuth, registration_code: string) =
       description: r.description,
       creation_date: r.creation_date,
       last_login: tstamp, # TODO should be nil?
-    ))
+  )
+  self.backend.set_user(result)
   self.backend.save_users()
 
 
@@ -500,13 +501,13 @@ proc delete_role*(self: HTTPAuth, role: string) =
 const one_day = 24 * 3600
 
 proc newHTTPAuth*(domain: string, backend: HTTPAuthBackend, cookie_name="", cookie_domain="",
-    password_reset_timeout=one_day, session_key="", https_only_cookies=true): HTTPAuth =
+    password_reset_timeout=one_day, session_key="", https_only_cookies=true, mailer = newMailer()): HTTPAuth =
   ## Initialize HTTPAuth
   result = HTTPAuth(domain: domain, backend: backend,
     password_reset_timeout: password_reset_timeout,
     https_only_cookies: https_only_cookies,
   )
-  result.mailer = newMailer() #FIXME: pass arguments
+  result.mailer = mailer
   assert result.backend != nil
 
   result.cookie_name = if cookie_name == "": domain else: cookie_name
